@@ -13,7 +13,6 @@ import Boot, { bootedAlready } from './components/Boot';
 const Portfolio     = lazy(() => import('./pages/Portfolio'));
 const AgentCipher   = lazy(() => import('./pages/AgentCipher'));
 const AgentEminence = lazy(() => import('./pages/AgentEminence'));
-const AgentEpsilon  = lazy(() => import('./pages/AgentEpsilon'));
 const GameX         = lazy(() => import('./pages/GameX'));
 
 /** Quiet hold while a route chunk arrives — no spinner, no layout jump. */
@@ -43,7 +42,6 @@ function Shell() {
             <Route path="/"               element={<Portfolio />} />
             <Route path="/agent-cipher"   element={<AgentCipher />} />
             <Route path="/agent-eminence" element={<AgentEminence />} />
-            <Route path="/agent-epsilon"  element={<AgentEpsilon />} />
             <Route path="/game-x"         element={<GameX />} />
             <Route path="*"               element={<Portfolio />} />
           </Routes>
