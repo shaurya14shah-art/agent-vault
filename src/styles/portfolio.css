@@ -1,0 +1,278 @@
+/* ═══════════════════════════════════════════════════════════════
+   PORTFOLIO — landing surface
+   ═══════════════════════════════════════════════════════════════ */
+
+.hero {
+  position: relative;
+  height: 100svh;
+  min-height: 620px;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* The Sentinel lives in a fixed layer OUTSIDE the pinned hero.
+   ScrollTrigger's `pin` re-parents its target into a spacer element; a
+   WebGL canvas inside that target gets torn out of the DOM mid-measure and
+   never finishes initialising. Keeping the canvas out of the pinned subtree
+   is the fix — and it's cheaper, since the layer never re-layouts. */
+.hero__stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero__type {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-inline: var(--gutter);
+  pointer-events: none;
+  mix-blend-mode: exclusion;
+}
+
+/* Keep the wordmark in the left half so the construct has the right half
+   to itself. Below the breakpoint it goes full width and the construct
+   sits behind it. */
+@media (min-width: 861px) {
+  .hero__type { width: min(58%, 900px); }
+}
+
+.hero__line {
+  display: block;
+  /* Non-negotiable: splitChars() makes every letter an inline-block, and
+     breaks are legal between inline-blocks. Without this the wordmark can
+     split mid-word on any engine whose metrics run slightly wide. */
+  white-space: nowrap;
+  font-family: var(--display);
+  /* Starting value only — fitToWidth() solves for the real size once the
+     column is measurable, so the wordmark fills its column on every engine
+     instead of hoping a vw guess lands. */
+  font-size: var(--t-mega);
+  font-weight: 700;
+  line-height: 0.8;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+  color: var(--ink);
+  will-change: transform;
+}
+
+.hero__line--out {
+  color: transparent;
+  -webkit-text-stroke: 1.2px var(--ink);
+}
+
+.hero__sub {
+  margin-top: var(--s-6);
+  max-width: 40ch;
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  line-height: 2.1;
+}
+
+.hero__corner {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  pointer-events: none;
+  /* The bust's lit shoulder now passes under this corner text. Difference
+     blending keeps it readable over both the black page and the highlight,
+     instead of vanishing into whichever one it happens to overlap. */
+  mix-blend-mode: difference;
+}
+.hero__corner--bl { bottom: var(--s-6); left: var(--gutter); }
+.hero__corner--br { bottom: var(--s-6); right: var(--gutter); text-align: right; }
+
+/* Line that appears over the Sentinel at the far end of the pin */
+.hero__whisper {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding-inline: var(--gutter);
+  pointer-events: none;
+  opacity: 0;
+}
+.hero__whisper p {
+  max-width: 22ch;
+  text-align: center;
+  font-family: var(--display);
+  font-size: clamp(1.5rem, 3.4vw, 3rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+/* ── Manifesto ─────────────────────────────────────────────── */
+
+.manifesto {
+  position: relative;
+  z-index: var(--z-content);
+  padding-block: clamp(90px, 16vh, 190px);
+}
+.manifesto__body {
+  font-family: var(--display);
+  font-size: clamp(1.5rem, 3.5vw, 3.15rem);
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+  max-width: 22ch;
+}
+.manifesto__aside {
+  margin-top: var(--s-8);
+  margin-left: auto;
+  max-width: 46ch;
+}
+
+/* ── Index of dossiers ─────────────────────────────────────── */
+
+.index { position: relative; z-index: var(--z-content); }
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-5);
+  padding-block: clamp(26px, 4.2vh, 46px);
+  border-top: 1px solid var(--hairline);
+  isolation: isolate;
+}
+.row:last-of-type { border-bottom: 1px solid var(--hairline); }
+
+/* Accent flood that wipes in from the left on hover */
+.row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, var(--accent-haze), transparent 62%);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.8s var(--ease-io);
+}
+.row:hover::before { transform: scaleX(1); }
+
+.row__n {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  transition: color var(--d-base) var(--ease-out);
+}
+.row:hover .row__n { color: var(--accent); }
+
+.row__name {
+  font-family: var(--display);
+  font-size: clamp(2rem, 6.2vw, 5.4rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+  color: var(--ink);
+  transition: transform 0.85s var(--ease-io), color 0.5s var(--ease-out);
+  will-change: transform;
+}
+.row:hover .row__name { transform: translateX(clamp(10px, 2.4vw, 40px)); color: var(--accent); }
+
+.row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.row__arrow {
+  display: inline-block;
+  transition: transform 0.7s var(--ease-io), color var(--d-base) var(--ease-out);
+}
+.row:hover .row__arrow { transform: translateX(12px) rotate(-45deg); color: var(--accent); }
+
+@media (max-width: 720px) {
+  .row { grid-template-columns: 44px minmax(0, 1fr); }
+  .row__meta { display: none; }
+}
+
+/* Floating preview that trails the cursor across the index */
+.peek {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 700;
+  width: clamp(240px, 24vw, 380px);
+  aspect-ratio: 16 / 10;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid var(--hairline-hi);
+  background: rgba(6, 6, 7, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow: hidden;
+  will-change: transform, opacity;
+}
+.peek__tag {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+}
+@media (hover: none), (pointer: coarse) { .peek { display: none; } }
+
+/* ── Disciplines ───────────────────────────────────────────── */
+
+.disc {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+.disc__cell {
+  background: var(--void);
+  padding: var(--s-6) var(--s-5);
+  transition: background var(--d-base) var(--ease-out);
+}
+.disc__cell:hover { background: var(--panel); }
+.disc__k {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--s-3);
+  display: block;
+}
+.disc__v {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+}

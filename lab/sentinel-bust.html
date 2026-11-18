@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The Sentinel — blank humanoid bust</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #060607; height: 100%; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: rgba(237,234,227,0.34);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    pointer-events: none; white-space: nowrap;
+  }
+  #tag {
+    position: fixed; top: 16px; left: 18px;
+    color: rgba(237,234,227,0.42);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="tag">Agent Vault · Sentinel v2</div>
+<div id="hud">Drag to rotate · Scroll to zoom</div>
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.185.1/three.module.min.js';
+
+/* ═══════════════════════════════════════════════════════════════
+   THE SENTINEL — blank humanoid bust
+
+   Humanoid volume, blank surface. It has the anatomy of a head —
+   cranial mass, occiput fuller than the face, cheekbones as the widest
+   point, temple hollow, jaw angle, chin, neck, shoulders — and none of
+   the identity: no eyes, no nose, no mouth, no ears, no skin.
+
+   The surface is one continuous lofted skin, not a pile of primitives.
+   A head is defined by how its cross-section changes with height, so
+   that is what's authored: a stack of control rings, each with its own
+   half-width and its own *separate* front and back depth. The
+   front/back asymmetry is what stops it reading as an egg — a real
+   skull is flat at the face and full at the back.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Control rings, bottom to top: [ y, halfWidth, depthFront, depthBack ] */
+const CTRL = [
+  /* shoulders */
+  [-2.30, 1.88, 0.74, 0.86],
+  [-2.12, 1.70, 0.73, 0.85],
+  [-1.92, 1.34, 0.68, 0.80],
+  /* trapezius sweeping up into the neck */
+  [-1.72, 1.00, 0.60, 0.72],
+  [-1.52, 0.76, 0.52, 0.62],
+  /* neck */
+  [-1.32, 0.55, 0.45, 0.53],
+  [-1.12, 0.47, 0.42, 0.49],
+  [-0.94, 0.45, 0.42, 0.48],
+  /* jaw line — chin pushes forward, back stays short */
+  [-0.82, 0.49, 0.58, 0.50],
+  [-0.68, 0.58, 0.70, 0.58],
+  [-0.52, 0.68, 0.77, 0.68],
+  /* mouth / lower cheek */
+  [-0.34, 0.77, 0.81, 0.78],
+  [-0.16, 0.83, 0.83, 0.85],
+  /* cheekbones — widest point of the head */
+  [ 0.00, 0.87, 0.83, 0.90],
+  /* eye line */
+  [ 0.14, 0.855, 0.815, 0.925],
+  /* brow ridge */
+  [ 0.28, 0.838, 0.805, 0.940],
+  /* temple hollow — the sides draw in above the brow */
+  [ 0.44, 0.812, 0.775, 1.010],
+  [ 0.60, 0.800, 0.755, 1.070],
+  /* forehead into cranium. Depth here is deliberately greater than width:
+     a real skull is about 1.2× deeper than it is wide, and matching depth
+     to width is what makes a generated head read as an egg. */
+  [ 0.80, 0.780, 0.740, 1.100],
+  /* Crown follows an ellipsoid cap — r = R·√(1−((y−y₀)/h)²). Tapering
+     linearly to a point instead is what produced the pinched spike. */
+  [ 0.95, 0.762, 0.723, 1.074],
+  [ 1.10, 0.705, 0.669, 0.994],
+  [ 1.25, 0.597, 0.567, 0.842],
+  [ 1.36, 0.468, 0.444, 0.660],
+  [ 1.44, 0.316, 0.300, 0.446],
+  [ 1.48, 0.185, 0.176, 0.261],
+  [ 1.50, 0.070, 0.066, 0.099],
+  /* Carry the taper almost to zero. Capping a ring that still has real
+     radius with a fan leaves a visible cone pinned to the crown. */
+  [ 1.512, 0.022, 0.021, 0.031],
+];
+
+const SEG = 84;          // angular resolution
+const SUBDIV = 4;        // rings inserted between each control pair
+const SMOOTH_PASSES = 6; // neighbour averaging — this is what kills faceting
+
+/* Insert intermediate rings, then relax them. Linear subdivision plus a
+   few smoothing passes gets a cleaner curve than hand-tuning splines,
+   and it can't overshoot into a bulge the way Catmull-Rom can. */
+function loftRings(ctrl) {
+  const out = [];
+  for (let i = 0; i < ctrl.length - 1; i++) {
+    const a = ctrl[i], b = ctrl[i + 1];
+    for (let s = 0; s < SUBDIV; s++) {
+      const t = s / SUBDIV;
+      out.push([
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+      ]);
+    }
+  }
+  out.push(ctrl[ctrl.length - 1].slice());
+
+  for (let p = 0; p < SMOOTH_PASSES; p++) {
+    const snap = out.map((r) => r.slice());
+    for (let i = 1; i < out.length - 1; i++) {
+      for (let k = 1; k < 4; k++) {
+        out[i][k] = snap[i - 1][k] * 0.25 + snap[i][k] * 0.5 + snap[i + 1][k] * 0.25;
+      }
+    }
+  }
+  return out;
+}
+
+const RINGS = loftRings(CTRL);
+
+/* Cross-section shape at one ring.
+
+   A plain ellipse (exponent 1) gives an egg. Human heads aren't elliptical:
+   the face is a broad flat plane, the sides are slabbed, the occiput is
+   round. Superellipse exponents below 1 flatten an axis, so the front gets
+   the flattest exponent, the sides a mild one, and the back stays round. */
+const P_FRONT = 0.62;
+const P_SIDE  = 0.86;
+const P_BACK  = 1.00;
+
+function surfacePoint(ring, theta, swell = 1) {
+  const [y, wx, df, db] = ring;
+  const s = Math.sin(theta);
+  const c = Math.cos(theta);
+
+  const x = Math.sign(s) * Math.pow(Math.abs(s), P_SIDE) * wx * swell;
+  const depth = c >= 0 ? df : db;
+  const p = c >= 0 ? P_FRONT : P_BACK;
+  const z = Math.sign(c) * Math.pow(Math.abs(c), p) * depth * swell;
+
+  return [x, y, z];
+}
+
+/* Interpolate a ring at an arbitrary height — used to sit the visor on
+   the actual surface rather than at a guessed offset. */
+function ringAt(y) {
+  if (y <= RINGS[0][0]) return RINGS[0];
+  if (y >= RINGS[RINGS.length - 1][0]) return RINGS[RINGS.length - 1];
+  for (let i = 0; i < RINGS.length - 1; i++) {
+    const a = RINGS[i], b = RINGS[i + 1];
+    if (y >= a[0] && y <= b[0]) {
+      const t = (y - a[0]) / (b[0] - a[0] || 1);
+      return [
+        y,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+      ];
+    }
+  }
+  return RINGS[RINGS.length - 1];
+}
+
+/* ── The skin ────────────────────────────────────────────────── */
+
+function buildBust() {
+  const positions = [];
+  const indices = [];
+
+  // Bottom cap centre
+  positions.push(0, RINGS[0][0], 0);
+  const BOTTOM = 0;
+
+  const ringStart = [];
+  for (const ring of RINGS) {
+    ringStart.push(positions.length / 3);
+    for (let j = 0; j < SEG; j++) {
+      const theta = (j / SEG) * Math.PI * 2;
+      const [x, y, z] = surfacePoint(ring, theta);
+      positions.push(x, y, z);
+    }
+  }
+
+  const APEX = positions.length / 3;
+  const top = RINGS[RINGS.length - 1];
+  // Close the dome almost flat. At this radius the dome's normal is already
+  // pointing straight up, so a near-flat cap continues the curve; anything
+  // taller creates a crease the rim light finds instantly and reads as a nub.
+  positions.push(0, top[0] + top[1] * 0.2, 0);
+
+  // Bottom fan — reversed winding, apex sits below its ring
+  const first = ringStart[0];
+  for (let j = 0; j < SEG; j++) {
+    indices.push(BOTTOM, first + ((j + 1) % SEG), first + j);
+  }
+
+  // Bands
+  for (let i = 0; i < RINGS.length - 1; i++) {
+    const s0 = ringStart[i];
+    const s1 = ringStart[i + 1];
+    for (let j = 0; j < SEG; j++) {
+      const jn = (j + 1) % SEG;
+      const a = s0 + j, b = s0 + jn, c = s1 + jn, d = s1 + j;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+
+  // Crown fan
+  const last = ringStart[RINGS.length - 1];
+  for (let j = 0; j < SEG; j++) {
+    indices.push(APEX, last + j, last + ((j + 1) % SEG));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  // Indexed + computeVertexNormals = shared normals = smooth shading.
+  // (Calling toNonIndexed() first is what makes it faceted — don't.)
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/* ── The visor ───────────────────────────────────────────────
+   A band that hugs the brow. Because it samples the same surface
+   function, it stays welded to the face however the profile is retuned. */
+
+function buildVisor({ yMid = 0.175, halfHeight = 0.058, spread = 1.42, lift = 1.012 }) {
+  const positions = [];
+  const indices = [];
+  const COLS = 80, ROWS = 5;
+
+  for (let r = 0; r <= ROWS; r++) {
+    const v = r / ROWS;                       // 0 = bottom edge, 1 = top edge
+    for (let cI = 0; cI <= COLS; cI++) {
+      const u = (cI / COLS) * 2 - 1;          // −1 … +1 across the band
+      const theta = spread * u;
+
+      // Lens profile: full height at the bridge, tapering to nothing at the
+      // temples. A constant-height band reads as a rectangle stuck on the
+      // face; tapering it makes it a slit cut into the head.
+      const h = halfHeight * (1 - Math.pow(Math.abs(u), 2.4));
+      const y = yMid - h + (h * 2) * v;
+
+      // Sit it just proud of the surface, and let that lift fall off at the
+      // ends so the band sinks back into the cheek instead of stopping dead.
+      const edge = 1 - Math.pow(Math.abs(u), 3);
+      const [x, , z] = surfacePoint(ringAt(y), theta, 1 + (lift - 1) * edge);
+      positions.push(x, y, z);
+    }
+  }
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let cI = 0; cI < COLS; cI++) {
+      const a = r * (COLS + 1) + cI;
+      const b = a + 1;
+      const c = (r + 1) * (COLS + 1) + cI + 1;
+      const d = (r + 1) * (COLS + 1) + cI;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Scene
+   ═══════════════════════════════════════════════════════════════ */
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
+
+const ACCENT = 0xb57bff;
+
+/* ── Lighting ────────────────────────────────────────────────
+   Portrait lighting, not product lighting: a high key from camera-left,
+   a weak warm bounce from the right, and a hard rim from behind that
+   draws the jaw and cranium out of a near-black background. */
+scene.add(new THREE.AmbientLight(0x30323c, 1.1));
+
+const key = new THREE.DirectionalLight(0xdfeaff, 2.5);
+key.position.set(-4.5, 5.2, 3.6);
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xffd9a8, 0.75);
+fill.position.set(5.2, -1.4, 2.6);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffffff, 3.4);
+rim.position.set(-1.8, 2.6, -6);
+scene.add(rim);
+
+const kicker = new THREE.PointLight(ACCENT, 26, 16);
+kicker.position.set(0, 0.6, -3.2);
+scene.add(kicker);
+
+/* ── Materials ───────────────────────────────────────────────
+   Graphite pearl. Dark enough to sit in a near-black page, polished
+   enough to describe the form through its highlights. Bright chrome
+   would read as a mannequin in a shop window and would steal focus
+   from the visor. */
+const skin = new THREE.MeshPhysicalMaterial({
+  color: 0x212229,
+  metalness: 0.55,
+  // Rougher, with a softer clearcoat. A mirror-polish clearcoat on a curved
+  // face collects tight white specular blobs on the forehead and cheek that
+  // read as grease, not polish — the highlight has to be broad and soft to
+  // describe the form instead of sitting on top of it.
+  roughness: 0.38,
+  clearcoat: 0.55,
+  clearcoatRoughness: 0.34,
+  iridescence: 0.16,
+  iridescenceIOR: 1.35,
+  sheen: 0.45,
+  sheenColor: new THREE.Color(0x8f9bd0),
+});
+
+const visorMat = new THREE.MeshBasicMaterial({
+  color: ACCENT,
+  side: THREE.DoubleSide,
+  toneMapped: false,
+});
+
+const model = new THREE.Group();
+
+const bust = new THREE.Mesh(buildBust(), skin);
+model.add(bust);
+
+const visor = new THREE.Mesh(buildVisor({}), visorMat);
+model.add(visor);
+
+/* Soft bloom stand-in behind the visor */
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowCanvas.height = 128;
+{
+  const g = glowCanvas.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.4)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+}
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: new THREE.CanvasTexture(glowCanvas),
+  color: ACCENT,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.5,
+  toneMapped: false,
+}));
+glow.position.set(0, 0.175, 0.9);
+glow.scale.set(1.9, 0.4, 1);
+model.add(glow);
+
+/* Halo — the one ornament. Thin enough to read as jewellery. */
+const halo = new THREE.Mesh(
+  new THREE.TorusGeometry(1.72, 0.0055, 3, 160),
+  new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.34, toneMapped: false })
+);
+halo.rotation.x = 1.38;
+halo.position.y = 0.1;
+model.add(halo);
+
+model.position.y = -0.15;
+scene.add(model);
+
+/* ── Controls (hand-rolled — cdnjs doesn't serve OrbitControls) ── */
+let dragging = false, prevX = 0, prevY = 0;
+let rotX = 0.02, rotY = 0.52, dist = 6.4;
+let targetRotX = rotX, targetRotY = rotY;
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  dragging = true; prevX = e.clientX; prevY = e.clientY;
+});
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  targetRotY += (e.clientX - prevX) * 0.006;
+  targetRotX += (e.clientY - prevY) * 0.005;
+  targetRotX = Math.max(-0.9, Math.min(1.0, targetRotX));
+  prevX = e.clientX; prevY = e.clientY;
+});
+renderer.domElement.addEventListener('wheel', (e) => {
+  dist = Math.max(3.2, Math.min(13, dist + e.deltaY * 0.004));
+}, { passive: true });
+
+/* ── Loop ────────────────────────────────────────────────────── */
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Idle: breathe, and drift just enough that it never looks frozen.
+  model.position.y = -0.15 + Math.sin(t * 0.75) * 0.035;
+  model.rotation.y = Math.sin(t * 0.22) * 0.06;
+  halo.rotation.z += 0.0016;
+
+  // Visor pulse + a rare blink.
+  const breath = 0.74 + Math.sin(t * 1.35) * 0.13;
+  const blink = Math.sin(t * 0.31) > 0.995 ? 0.1 : 1;
+  const level = breath * blink;
+  visorMat.color.setHex(ACCENT).multiplyScalar(0.42 + level * 0.85);
+  glow.material.opacity = 0.14 + level * 0.28;
+  glow.scale.set(1.85 + level * 0.3, 0.36 + level * 0.14, 1);
+
+  rotX += (targetRotX - rotX) * 0.08;
+  rotY += (targetRotY - rotY) * 0.08;
+
+  camera.position.x = dist * Math.sin(rotY) * Math.cos(rotX);
+  camera.position.y = dist * Math.sin(rotX) + 0.15;
+  camera.position.z = dist * Math.cos(rotY) * Math.cos(rotX);
+  camera.lookAt(0, 0.05, 0);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

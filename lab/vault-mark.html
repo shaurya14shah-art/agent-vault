@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agent Vault — the mark</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #060607; height: 100%; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: rgba(237,234,227,0.34);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    pointer-events: none; white-space: nowrap;
+  }
+  #tag {
+    position: fixed; top: 16px; left: 18px;
+    color: rgba(237,234,227,0.42);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="tag">Agent Vault · the mark</div>
+<div id="hud">Drag to rotate · Scroll to zoom · Space to seal/unseal</div>
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.185.1/three.module.min.js';
+
+/* ═══════════════════════════════════════════════════════════════
+   THE MARK
+
+   A closed band running around a rounded-square path, twisting as it
+   goes, so the surface turns from face-on to edge-on and back. That
+   twist is the whole character of the form — it's what makes a plain
+   ring read as a sculpture and gives the silhouette its crossings.
+
+   Built as a parametric surface rather than a TubeGeometry, because a
+   tube has a circular section and this needs a flat *ribbon* whose
+   section rotates along the path.
+
+   The frame is deliberately NOT Frenet. A planar curve has zero torsion
+   and its Frenet normal flips at inflection points, which would put
+   creases in the surface. Instead the band rides a fixed out-of-plane
+   binormal, and all rotation comes from the twist term — so the twist
+   is exactly what's authored, nothing more.
+   ═══════════════════════════════════════════════════════════════ */
+
+const PARAMS = {
+  R: 1.0,            // loop radius
+  squareness: 3.0,   // superellipse exponent — 2 = circle, higher = squarer
+  ribbonW: 0.40,     // half-width of the band (the broad face)
+  ribbonT: 0.125,    // half-thickness (the edge)
+  // One turn, not two. Two gives four edge-on crossings and the silhouette
+  // goes frilly; one gives the two clean crossings the reference has.
+  twistTurns: 1,
+  uSeg: 360,
+  vSeg: 28,
+};
+
+/* Rounded-square path. Superellipse: |x|^n + |y|^n = R^n */
+function pathPoint(t, out, P = PARAMS) {
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  const e = 2 / P.squareness;
+  return out.set(
+    Math.sign(c) * Math.pow(Math.abs(c), e) * P.R,
+    Math.sign(s) * Math.pow(Math.abs(s), e) * P.R,
+    0
+  );
+}
+
+const _a = new THREE.Vector3();
+const _b = new THREE.Vector3();
+const _p = new THREE.Vector3();
+const _t = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const B_AXIS = new THREE.Vector3(0, 0, 1);
+
+function writePositions(arr, twist, P = PARAMS) {
+  const { uSeg, vSeg, ribbonW, ribbonT } = P;
+  let i = 0;
+
+  for (let u = 0; u <= uSeg; u++) {
+    const t = (u / uSeg) * Math.PI * 2;
+
+    pathPoint(t, _p, P);
+    // Tangent by central difference — cheap and stable at the corners,
+    // where an analytic derivative of the superellipse blows up.
+    const h = 0.0015;
+    pathPoint(t + h, _a, P);
+    pathPoint(t - h, _b, P);
+    _t.subVectors(_a, _b).normalize();
+    _n.crossVectors(_t, B_AXIS).normalize();   // in-plane normal
+
+    const phi = twist * t;
+    const cp = Math.cos(phi);
+    const sp = Math.sin(phi);
+
+    for (let v = 0; v <= vSeg; v++) {
+      const th = (v / vSeg) * Math.PI * 2;
+      // Elliptical section: broad face, rounded edges, no hard corners.
+      const la = ribbonW * Math.cos(th);
+      const lb = ribbonT * Math.sin(th);
+
+      const dn = la * cp - lb * sp;
+      const db = la * sp + lb * cp;
+
+      arr[i++] = _p.x + _n.x * dn + B_AXIS.x * db;
+      arr[i++] = _p.y + _n.y * dn + B_AXIS.y * db;
+      arr[i++] = _p.z + _n.z * dn + B_AXIS.z * db;
+    }
+  }
+}
+
+function buildMark(P = PARAMS) {
+  const { uSeg, vSeg } = P;
+  const count = (uSeg + 1) * (vSeg + 1);
+  const positions = new Float32Array(count * 3);
+  writePositions(positions, P.twistTurns, P);
+
+  const indices = [];
+  const row = vSeg + 1;
+  for (let u = 0; u < uSeg; u++) {
+    for (let v = 0; v < vSeg; v++) {
+      const a = u * row + v;
+      const b = a + row;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Scene
+   ═══════════════════════════════════════════════════════════════ */
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+/* Soft product-shot lighting. The reference is matte white with a long
+   gradient falloff, which comes from big soft sources — a hemisphere
+   light does most of that work, the directionals just shape it. */
+scene.add(new THREE.HemisphereLight(0xf4f2ee, 0x0a0a0c, 1.35));
+scene.add(new THREE.AmbientLight(0x2a2c33, 0.6));
+
+const key = new THREE.DirectionalLight(0xffffff, 1.9);
+key.position.set(-3.4, 4.6, 3.2);
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xdfe6ff, 0.5);
+fill.position.set(4.4, -1.2, 2.4);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffffff, 1.1);
+rim.position.set(-1.2, 1.6, -5);
+scene.add(rim);
+
+/* Matte, chalky, no glare — the form is described by shading, not
+   highlights. Any real specular here makes it read as plastic. */
+const markMat = new THREE.MeshPhysicalMaterial({
+  color: 0xe9e6df,
+  metalness: 0.0,
+  roughness: 0.62,
+  clearcoat: 0.12,
+  clearcoatRoughness: 0.7,
+  sheen: 0.6,
+  sheenRoughness: 0.9,
+  sheenColor: new THREE.Color(0xbfc6da),
+  side: THREE.DoubleSide,
+});
+
+const geo = buildMark();
+const mark = new THREE.Mesh(geo, markMat);
+
+// Stand it on a corner — the mark reads as a diamond, not a square.
+mark.rotation.z = Math.PI / 4;
+
+const model = new THREE.Group();
+model.add(mark);
+scene.add(model);
+
+/* ── Controls ─────────────────────────────────────────────── */
+let dragging = false, prevX = 0, prevY = 0;
+let rotX = 0.0, rotY = 0.0, dist = 5.4;
+let targetRotX = rotX, targetRotY = rotY;
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  dragging = true; prevX = e.clientX; prevY = e.clientY;
+});
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  targetRotY += (e.clientX - prevX) * 0.006;
+  targetRotX += (e.clientY - prevY) * 0.005;
+  targetRotX = Math.max(-1.2, Math.min(1.2, targetRotX));
+  prevX = e.clientX; prevY = e.clientY;
+});
+renderer.domElement.addEventListener('wheel', (e) => {
+  dist = Math.max(2.6, Math.min(12, dist + e.deltaY * 0.004));
+}, { passive: true });
+
+/* Space toggles the "seal" — the twist animating is the mark doing
+   work rather than just spinning. */
+let sealTarget = 0, seal = 0;
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); sealTarget = sealTarget > 0.5 ? 0 : 1; }
+});
+
+const clock = new THREE.Clock();
+let lastTwist = -999;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  seal += (sealTarget - seal) * 0.045;
+
+  // Rebuild only when the twist actually moved — the geometry pass is
+  // ~10k vertices and there's no reason to pay for it every frame.
+  const twist = PARAMS.twistTurns - seal * 1.0;
+  if (Math.abs(twist - lastTwist) > 0.0015) {
+    lastTwist = twist;
+    writePositions(geo.attributes.position.array, twist);
+    geo.attributes.position.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+
+  model.rotation.z = t * 0.16;
+  model.rotation.x = Math.sin(t * 0.35) * 0.12;
+  model.position.y = Math.sin(t * 0.7) * 0.04;
+
+  rotX += (targetRotX - rotX) * 0.08;
+  rotY += (targetRotY - rotY) * 0.08;
+
+  camera.position.x = dist * Math.sin(rotY) * Math.cos(rotX);
+  camera.position.y = dist * Math.sin(rotX);
+  camera.position.z = dist * Math.cos(rotY) * Math.cos(rotX);
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,365 @@
+/* ═══════════════════════════════════════════════════════════════
+   DOSSIER — shared chassis for the four product pages.
+   Each page overrides the parts that make it its own.
+   ═══════════════════════════════════════════════════════════════ */
+
+.dhero {
+  position: relative;
+  height: 100svh;
+  min-height: 600px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.dhero__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.dhero__body {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-inline: var(--gutter);
+  pointer-events: none;
+}
+.dhero__body > * { pointer-events: auto; }
+
+.dhero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--s-5);
+}
+.dhero__eyebrow b { color: var(--accent); font-weight: 500; }
+
+.dhero__title {
+  font-family: var(--display);
+  font-size: var(--t-mega);
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+  color: var(--ink);
+  /* Same reasoning as .hero__line — DecryptField and TorchTitle both build
+     per-character inline-blocks, so a long title like AGENT CIPHER would
+     otherwise be free to break between any two letters. */
+  white-space: nowrap;
+}
+
+/* One measured line of a dossier title. */
+.dhero__line {
+  display: block;
+  white-space: nowrap;
+}
+
+.dhero__tag {
+  margin-top: var(--s-6);
+  max-width: 46ch;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 2;
+  color: var(--ink-2);
+}
+
+.dhero__foot {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: var(--s-6);
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-5);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+/* A thin readout strip that runs under the hero on every dossier */
+.readout {
+  position: relative;
+  z-index: var(--z-content);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-6);
+  padding: var(--s-4) var(--gutter);
+  border-block: 1px solid var(--hairline);
+  background: rgba(6, 6, 7, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.readout b { color: var(--accent); font-weight: 500; }
+
+/* Pinned "chapter" panel used by several dossiers */
+.chapter {
+  position: relative;
+  height: 100svh;
+  display: grid;
+  place-items: center;
+  padding-inline: var(--gutter);
+  overflow: hidden;
+}
+.chapter__line {
+  max-width: 20ch;
+  text-align: center;
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 4.4vw, 3.8rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: var(--track-tight);
+  text-wrap: balance;
+}
+
+/* Horizontal scroll rail */
+.rail {
+  position: relative;
+  overflow: hidden;
+}
+.rail__track {
+  display: flex;
+  gap: var(--s-5);
+  will-change: transform;
+  padding-inline: var(--gutter);
+}
+.rail__card {
+  flex: 0 0 clamp(260px, 30vw, 400px);
+  min-height: clamp(280px, 34vh, 380px);
+  padding: var(--s-6);
+  border: 1px solid var(--hairline);
+  background: linear-gradient(155deg, rgba(20,20,24,0.7), rgba(8,8,10,0.5));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: border-color var(--d-base) var(--ease-out),
+              background var(--d-base) var(--ease-out);
+}
+.rail__card:hover {
+  border-color: var(--accent-dim);
+  background: linear-gradient(155deg, rgba(26,26,30,0.85), rgba(10,10,12,0.6));
+}
+.rail__n {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.rail__h {
+  font-family: var(--display);
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  margin-top: auto;
+  margin-bottom: var(--s-3);
+}
+.rail__b { color: var(--ink-2); font-size: 0.9rem; }
+
+/* Next-dossier hand-off at the foot of every product page */
+.nextup {
+  position: relative;
+  z-index: var(--z-content);
+  display: block;
+  padding: clamp(50px, 9vh, 110px) var(--gutter);
+  border-top: 1px solid var(--hairline);
+  overflow: hidden;
+}
+.nextup__k {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--s-4);
+  display: block;
+}
+.nextup__n {
+  font-family: var(--display);
+  font-size: clamp(2.2rem, 8vw, 7rem);
+  font-weight: 700;
+  line-height: 0.88;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink-3);
+  transition: color 0.7s var(--ease-io), -webkit-text-stroke-color 0.7s var(--ease-io),
+              transform 0.9s var(--ease-io);
+  display: inline-block;
+}
+.nextup:hover .nextup__n {
+  color: var(--accent);
+  -webkit-text-stroke-color: transparent;
+  transform: translateX(clamp(8px, 2vw, 28px));
+}
+
+/* ── Ensemble dial (Eminence landing interaction) ──────────── */
+
+.dial {
+  width: min(100%, 620px);
+  border: 1px solid var(--hairline);
+  background: rgba(6, 6, 7, 0.66);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: var(--s-5);
+}
+
+.dial__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: var(--s-4);
+}
+
+.dial__row {
+  display: grid;
+  grid-template-columns: 128px 1fr 42px;
+  grid-template-areas: "k track v" "d d d";
+  align-items: center;
+  gap: 6px var(--s-4);
+  padding-block: 5px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+}
+
+.dial__k { grid-area: k; color: var(--ink); text-transform: uppercase; }
+.dial__track {
+  grid-area: track;
+  height: 3px;
+  background: var(--hairline);
+  position: relative;
+  overflow: hidden;
+}
+.dial__bar {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(0.4);
+  will-change: transform;
+}
+.dial__v {
+  grid-area: v;
+  text-align: right;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.dial__d { display: none; }
+
+.dial__foot {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+  text-transform: none;
+  letter-spacing: 0.04em;
+  line-height: 1.7;
+}
+
+@media (max-width: 560px) {
+  .dial__row { grid-template-columns: 100px 1fr 40px; font-size: 0.6rem; }
+}
+
+/* ── Epsilon mode switch ───────────────────────────────────── */
+
+.modeswitch {
+  position: relative;
+  height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.modeswitch__stack {
+  position: relative;
+  text-align: center;
+  padding-inline: var(--gutter);
+}
+.modeswitch__label {
+  font-family: var(--display);
+  font-size: clamp(1.8rem, 6vw, 5rem);
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+}
+.modeswitch__from { color: var(--ink); }
+.modeswitch__to {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  opacity: 0;
+}
+.modeswitch__sub {
+  margin-top: var(--s-5);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ── Game X biome ticker ───────────────────────────────────── */
+
+.biome {
+  position: fixed;
+  left: var(--gutter);
+  bottom: var(--s-6);
+  z-index: 60;
+  pointer-events: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+}
+.biome__n {
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 3.6vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: var(--track-tight);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.biome__i {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+@media (max-width: 720px) { .biome { display: none; } }
+
+/* Torch-masked title for Game X */
+.torch {
+  position: relative;
+  display: inline-block;
+}
+.torch__base {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink-4);
+}
+.torch__lit {
+  position: absolute;
+  inset: 0;
+  color: var(--accent);
+  -webkit-text-stroke: 0;
+  will-change: -webkit-mask-position, mask-position;
+}

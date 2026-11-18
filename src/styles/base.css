@@ -1,0 +1,705 @@
+/* ═══════════════════════════════════════════════════════════════
+   AGENT VAULT — BASE LAYER
+   ═══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+* {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  background: var(--void);
+  /* Lenis drives scroll; native smooth would fight it. */
+  scroll-behavior: auto;
+}
+
+/* Hide the native scrollbar.
+   Lenis already owns the scroll position, so the bar is inert decoration —
+   and a light overlay bar tracking down the right edge of a full-bleed dark
+   layout is the one element that gives away that this is a web page. Scroll
+   input (wheel, trackpad, keyboard, touch) is untouched; only the indicator
+   goes. The progress markers in each section carry position instead. */
+html,
+body {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy Edge */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;                /* WebKit / Blink */
+}
+
+body {
+  font-family: var(--body);
+  font-size: var(--t-body);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--void);
+  overflow-x: clip;
+  /* The whole site is cursor-driven. Hide the OS arrow on pointer devices. */
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body, a, button, [role="button"] { cursor: none; }
+}
+
+::selection { background: var(--accent); color: var(--void); }
+
+img, svg, canvas { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: none; }
+ul, ol { list-style: none; }
+
+/* Lenis */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* ─────────────────────────────────────────────────────────────
+   TYPOGRAPHY
+   ───────────────────────────────────────────────────────────── */
+
+.t-mega, .t-giant, .t-huge {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 0.84;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+}
+
+.t-mega  { font-size: var(--t-mega); }
+.t-giant { font-size: var(--t-giant); }
+.t-huge  { font-size: var(--t-huge); line-height: 0.92; letter-spacing: var(--track-tight); }
+
+.t-large {
+  font-family: var(--display);
+  font-size: var(--t-large);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: var(--track-tight);
+}
+
+.t-lead {
+  font-size: var(--t-lead);
+  line-height: 1.52;
+  color: var(--ink-2);
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+/* The mono voice: labels, coordinates, classifications. */
+.t-mono {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.t-mono--accent { color: var(--accent); }
+
+/* Section index marker — the "01 / OVERVIEW" device */
+.marker {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: var(--s-7);
+}
+.marker__n {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+.marker__t {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.marker__r { margin-left: auto; }
+
+/* ─────────────────────────────────────────────────────────────
+   LAYOUT
+   ───────────────────────────────────────────────────────────── */
+
+.page {
+  position: relative;
+  width: 100%;
+  background: var(--void);
+  overflow-x: clip;
+}
+
+.shell { padding-inline: var(--gutter); }
+
+.section {
+  position: relative;
+  z-index: var(--z-content);
+  padding-block: clamp(80px, 14vh, 180px);
+}
+
+.canvas-fixed {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-canvas);
+  pointer-events: none;
+}
+
+.grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--s-5);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ATMOSPHERE — grain, vignette, scanlines
+   These are what make a flat dark page feel like a material.
+   ───────────────────────────────────────────────────────────── */
+
+.grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 400;
+  pointer-events: none;
+  opacity: 0.032;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-drift 0.7s steps(3) infinite;
+  will-change: transform;
+}
+
+@keyframes grain-drift {
+  0%   { transform: translate(0, 0); }
+  33%  { transform: translate(-2%, 1%); }
+  66%  { transform: translate(1%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 390;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 120% 90% at 50% 45%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CURSOR
+   ───────────────────────────────────────────────────────────── */
+
+.cursor-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  mix-blend-mode: difference;
+}
+@media (hover: none), (pointer: coarse) { .cursor-layer { display: none; } }
+
+.cursor__dot {
+  position: absolute;
+  top: 0; left: 0;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+  will-change: transform;
+}
+
+.cursor__ring {
+  position: absolute;
+  top: 0; left: 0;
+  width: 42px; height: 42px;
+  border: 1px solid rgba(237, 234, 227, 0.55);
+  border-radius: 50%;
+  will-change: transform;
+  display: grid;
+  place-items: center;
+}
+
+.cursor__label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0;
+  white-space: nowrap;
+  will-change: opacity;
+}
+
+.cursor__prog {
+  position: absolute;
+  inset: -1px;
+  transform: rotate(-90deg);
+}
+.cursor__prog circle {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAGNETIC / INTERACTIVE PRIMITIVES
+   ───────────────────────────────────────────────────────────── */
+
+.mag { display: inline-block; will-change: transform; }
+.mag__inner { display: inline-block; will-change: transform; }
+
+/* Line-mask reveal: each line sits in an overflow-hidden sleeve
+   and slides up from beneath it. */
+.rv { display: block; overflow: hidden; }
+.rv__i { display: block; will-change: transform; }
+
+/* Character-level stagger */
+.ch { display: inline-block; will-change: transform; }
+
+/* ─────────────────────────────────────────────────────────────
+   SURFACES
+   ───────────────────────────────────────────────────────────── */
+
+.panel {
+  position: relative;
+  background: linear-gradient(
+    160deg,
+    rgba(22, 22, 26, 0.72) 0%,
+    rgba(10, 10, 12, 0.62) 100%
+  );
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  padding: var(--s-6);
+}
+
+/* Corner ticks — the "instrument panel" tell */
+.panel--ticked::before,
+.panel--ticked::after {
+  content: "";
+  position: absolute;
+  width: 9px; height: 9px;
+  border: 1px solid var(--accent);
+  opacity: 0.7;
+}
+.panel--ticked::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.panel--ticked::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+.hair { height: 1px; background: var(--hairline); border: 0; }
+
+/* ─────────────────────────────────────────────────────────────
+   BUTTONS
+   ───────────────────────────────────────────────────────────── */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-6);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border: 1px solid var(--hairline-hi);
+  border-radius: var(--radius);
+  overflow: hidden;
+  isolation: isolate;
+  transition: color var(--d-fast) var(--ease-out),
+              border-color var(--d-fast) var(--ease-out);
+}
+
+/* Wipe fill from the bottom on hover */
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform var(--d-base) var(--ease-io);
+}
+
+.btn:hover { color: var(--void); border-color: var(--accent); }
+.btn:hover::before { transform: scaleY(1); }
+
+.btn--solid {
+  background: var(--accent);
+  color: var(--void);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn--solid::before { background: var(--ink); }
+.btn--solid:hover { color: var(--void); }
+
+.btn--lg { padding: var(--s-5) var(--s-8); font-size: 0.78rem; }
+
+/* ─────────────────────────────────────────────────────────────
+   MARQUEE
+   ───────────────────────────────────────────────────────────── */
+
+.marquee {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+  border-block: 1px solid var(--hairline);
+  padding-block: var(--s-4);
+  user-select: none;
+}
+.marquee__track { display: flex; flex: 0 0 auto; will-change: transform; }
+.marquee__item {
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 3.6vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: var(--track-tight);
+  text-transform: uppercase;
+  padding-inline: var(--s-5);
+  color: var(--ink);
+}
+.marquee__item--ghost {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink-4);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   NAV
+   ───────────────────────────────────────────────────────────── */
+
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-5) var(--gutter);
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+.nav > * { pointer-events: auto; }
+
+.nav__mark {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The logo, kept quiet. At 20px a solid white mark shouts over the wordmark
+   beside it, so it sits at low opacity and only comes up on hover. */
+.nav__glyph {
+  display: block;
+  flex: 0 0 auto;
+  opacity: 0.55;
+  transition: transform 0.9s var(--ease-io), opacity var(--d-base) var(--ease-out);
+}
+.nav__mark:hover .nav__glyph,
+.backlink:hover .nav__glyph {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
+.nav__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-5);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+@media (max-width: 720px) { .nav__meta .nav__hide { display: none; } }
+
+/* Back link on dossier pages */
+.backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.backlink__arrow {
+  display: inline-block;
+  transition: transform var(--d-base) var(--ease-out);
+}
+.backlink:hover .backlink__arrow { transform: translateX(-6px); }
+
+/* ─────────────────────────────────────────────────────────────
+   FEATURE LIST — shared across dossiers
+   ───────────────────────────────────────────────────────────── */
+
+.feat {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: var(--s-5);
+  padding-block: var(--s-6);
+  border-top: 1px solid var(--hairline);
+  transition: background var(--d-base) var(--ease-out);
+}
+.feat:last-child { border-bottom: 1px solid var(--hairline); }
+.feat::after {
+  content: "";
+  position: absolute;
+  left: 0; top: -1px; right: 0;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--d-slow) var(--ease-out);
+}
+.feat:hover::after { transform: scaleX(1); }
+.feat__n {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--accent);
+  padding-top: 6px;
+}
+.feat__h {
+  font-family: var(--display);
+  font-size: clamp(1.15rem, 1.9vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+  margin-bottom: var(--s-3);
+  transition: transform var(--d-base) var(--ease-out);
+}
+.feat:hover .feat__h { transform: translateX(10px); }
+.feat__b { color: var(--ink-2); max-width: 56ch; font-size: 0.95rem; }
+
+/* ─────────────────────────────────────────────────────────────
+   SPEC TABLE
+   ───────────────────────────────────────────────────────────── */
+
+.spec { display: grid; gap: 0; }
+.spec__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 1.6fr;
+  gap: var(--s-5);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+}
+.spec__k { color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.16em; }
+.spec__v { color: var(--ink); }
+
+/* ─────────────────────────────────────────────────────────────
+   DOWNLOAD
+   ───────────────────────────────────────────────────────────── */
+
+.dl {
+  position: relative;
+  border: 1px solid var(--hairline-hi);
+  border-radius: var(--radius);
+  padding: clamp(24px, 4vw, 48px);
+  overflow: hidden;
+  background: linear-gradient(150deg, rgba(20,20,24,0.8), rgba(8,8,10,0.6));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.dl::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 82% 12%, var(--accent-haze), transparent 62%);
+  pointer-events: none;
+}
+.dl__bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   THANK YOU
+   ───────────────────────────────────────────────────────────── */
+
+.thanks {
+  position: relative;
+  text-align: center;
+  padding-block: clamp(100px, 20vh, 220px);
+  overflow: hidden;
+}
+.thanks__word {
+  font-family: var(--display);
+  font-size: var(--t-mega);
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: var(--track-mega);
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink-4);
+}
+.thanks__word--fill {
+  color: var(--ink);
+  -webkit-text-stroke: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FOOTER
+   ───────────────────────────────────────────────────────────── */
+
+.foot {
+  position: relative;
+  z-index: var(--z-content);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-6) var(--gutter);
+  border-top: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--void);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   VEIL — route transition
+   ───────────────────────────────────────────────────────────── */
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-veil);
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+.veil__col {
+  background: var(--void);
+  transform: scaleY(0);
+  transform-origin: bottom;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BOOT
+   ───────────────────────────────────────────────────────────── */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: grid;
+  place-items: center;
+  background: var(--void);
+}
+.boot__inner { width: min(420px, 74vw); }
+.boot__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: var(--s-4);
+}
+.boot__track { height: 1px; background: var(--hairline); position: relative; }
+.boot__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.boot__pct {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SCROLL HINT
+   ───────────────────────────────────────────────────────────── */
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hint__line {
+  width: 54px; height: 1px;
+  background: var(--ink-4);
+  position: relative;
+  overflow: hidden;
+}
+.hint__line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left;
+  animation: hint-sweep 2.2s var(--ease-io) infinite;
+}
+@keyframes hint-sweep {
+  0%   { transform: translateX(-100%); }
+  55%  { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   A11Y
+   ───────────────────────────────────────────────────────────── */
+
+.sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .grain { display: none; }
+}
